@@ -23,7 +23,6 @@ struct ContoursShape: Shape {
     
 }
 
-
 struct ContourDetectionView: View {
     @State private var contours: CGPath? = nil
     
@@ -43,12 +42,7 @@ struct ContourDetectionView: View {
 
                 ContoursShape(contours: contours)
                     .stroke(Color.white, lineWidth: 2)
-                    
-                    // 3. Apply aspect ratio directly to the Shape.
-                    //    SwiftUI Shapes naturally fill the space provided by this modifier.
                     .aspectRatio(aspectRatio, contentMode: .fit)
-                    
-                    // 4. The Mask
                     .mask(
                         GeometryReader { geo in
                             Color.black
@@ -67,7 +61,7 @@ struct ContourDetectionView: View {
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
-                                .frame(height: geo.size.height * 0.2) // 20% band
+                                .frame(height: geo.size.height * 0.2)
                                 .offset(y: (position - 0.2) * geo.size.height)
                             }
                         )
@@ -97,9 +91,6 @@ struct ContourDetectionView: View {
     
     private func drawContours() {
         Task {
-            
-            print(">>>> CALL detectContours Thread.isMainThread \(Thread.isMainThread)")
-            
             do {
                 contours = try await detectContours()
             } catch {
@@ -108,9 +99,9 @@ struct ContourDetectionView: View {
         }
     }
     
-    private nonisolated func detectContours() async throws -> CGPath? {
-        print(">>>> In detectContours Thread.isMainThread \(Thread.isMainThread)")
-        
+    
+    @concurrent
+    private func detectContours() async throws -> CGPath? {
         let image = UIImage(named: "sample")!
         
         // Image to be used
