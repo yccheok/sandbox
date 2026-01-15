@@ -24,25 +24,32 @@ struct ContoursShape: Shape {
 }
 
 struct ContourDetectionView: View {
-    @State private var contours: CGPath? = nil
+    private let sourceImage: UIImage
     
+    @State private var contours: CGPath? = nil
     @State private var position: CGFloat = 0.0
     
-    private let aspectRatio: CGSize = {
-        guard let image = UIImage(named: "sample") else { return CGSize(width: 1, height: 1) }
-        return image.size
-    }()
+    init(imageName: String = "sample") {
+        if let img = UIImage(named: imageName) {
+            self.sourceImage = img
+        } else {
+            // Fallback empty image to prevent crash if asset is missing
+            self.sourceImage = UIImage()
+            print("Error: Image \(imageName) not found")
+        }
+    }
     
     var body: some View {
         VStack {
             ZStack {
-                Image("sample")
+                Image(uiImage: sourceImage)
                     .resizable()
                     .scaledToFit()
 
                 ContoursShape(contours: contours)
+
                     .stroke(Color.white, lineWidth: 2)
-                    .aspectRatio(aspectRatio, contentMode: .fit)
+                    .aspectRatio(sourceImage.size, contentMode: .fit)
                     .mask(
                         GeometryReader { geo in
                             Color.black
@@ -50,7 +57,7 @@ struct ContourDetectionView: View {
                                 .offset(y: (position - 0.2) * geo.size.height)
                         }
                     )
-                
+
                 GeometryReader { geo in
                     Color.white
                         .frame(width: geo.size.width, height: geo.size.height)
@@ -75,7 +82,7 @@ struct ContourDetectionView: View {
                         }
                 }
                 .aspectRatio(
-                    UIImage(named: "sample")!.size,
+                    sourceImage.size,
                     contentMode: .fit
                 )
             }
@@ -90,9 +97,11 @@ struct ContourDetectionView: View {
     }
     
     private func drawContours() {
+        let processingImage = self.sourceImage
+                
         Task {
             do {
-                contours = try await detectContours()
+                contours = try await detectContours(from: processingImage)
             } catch {
                 print("Error detecting contours: \(error)")
             }
@@ -101,16 +110,14 @@ struct ContourDetectionView: View {
     
     
     @concurrent
-    private func detectContours() async throws -> CGPath? {
-        let image = UIImage(named: "sample")!
-        
-        // Image to be used
-        guard var image = CIImage(image: image) else {
+    private func detectContours(from inputImage: UIImage) async throws -> CGPath? {
+        // Image conversion
+        guard var ciImage = CIImage(image: inputImage) else {
             return nil
         }
         
-        if let mask = createMask(from: image) {
-            image = applyMask(mask: mask, to: image)
+        if let mask = createMask(from: ciImage) {
+            ciImage = applyMask(mask: mask, to: ciImage)
         }
         
         // Set up the detect contours request
@@ -120,7 +127,7 @@ struct ContourDetectionView: View {
         
         // Perform the detect contours request
         let contoursObservations = try await request.perform(
-            on: image,
+            on: ciImage,
             orientation: .downMirrored
         )
         
