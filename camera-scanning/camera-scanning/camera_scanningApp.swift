@@ -11,7 +11,7 @@ import SwiftUI
 struct camera_scanningApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ScannerView()
         }
     }
 }

@@ -1,7 +1,35 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-
+    "CFBundleName" : {
+      "comment" : "Bundle name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "camera-scanning"
+          }
+        }
+      }
+    },
+    "NSCameraUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "We need camera access to scan items. (Localised)"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "我們需要使用相機來掃描商品。"
+          }
+        }
+      }
+    }
   },
   "version" : "1.1"
 }
