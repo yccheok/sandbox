@@ -1,37 +1,85 @@
-//
-//  CameraService.swift
-//  camera-scanning
-//
-//  Created by Yan Cheng Cheok on 16/01/2026.
-//
-
 import SwiftUI
 import AVFoundation
 import Combine
 
 class CameraService: NSObject, ObservableObject {
     @Published var capturedImage: UIImage?
-    @Published var session = AVCaptureSession()
+    // 1. AlertError should be published on MainActor usually, but @Published handles it.
     @Published var alertError: AlertError?
     
+    // 2. Keep session public for PreviewLayer, but manage lifecycle internally
+    let session = AVCaptureSession()
+    
     private let photoOutput = AVCapturePhotoOutput()
+    // 3. Serial queue is correct to prevent blocking Main Thread
     private let sessionQueue = DispatchQueue(label: "camera.session.queue")
     
-    // We keep a reference to the preview layer to calculate the crop rect later
-    weak var previewLayer: AVCaptureVideoPreviewLayer?
-
+    private var isSessionConfigured = false
+    
     override init() {
         super.init()
+        // Don't auto-start in init. Just check permissions.
+        // Let the View tell us when to start (onAppear).
         checkPermissions()
+    }
+    
+    // MARK: - Deinit Safety
+    deinit {
+        // 4. STOPPING IN DEINIT
+        // We capture the SESSION, not 'self'. self is dying.
+        let session = self.session
+        sessionQueue.async {
+            if session.isRunning {
+                session.stopRunning()
+            }
+        }
+        print("CameraService deinit: Camera stopped")
+    }
+    
+    // MARK: - Lifecycle Management
+    
+    // Call this from SwiftUI .onAppear
+    func start() {
+        sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            // Only setup if needed
+            if !self.isSessionConfigured {
+                self.setupSession()
+            }
+            // Only start if not running
+            if !self.session.isRunning {
+                self.session.startRunning()
+            }
+        }
+    }
+    
+    // Call this from SwiftUI .onDisappear
+    func stop() {
+        sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            if self.session.isRunning {
+                self.session.stopRunning()
+            }
+        }
     }
     
     private func checkPermissions() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
-            setupSession()
+            // Permission good, wait for start() to be called
+            break
         case .notDetermined:
+            sessionQueue.suspend() // Pause queue until we know
             AVCaptureDevice.requestAccess(for: .video) { granted in
-                if granted { self.setupSession() }
+                if granted {
+                    self.sessionQueue.resume()
+                } else {
+                    // Handle denial
+                    DispatchQueue.main.async {
+                        self.alertError = AlertError(title: "Camera Error", message: "Permission denied.")
+                    }
+                    self.sessionQueue.resume()
+                }
             }
         default:
             DispatchQueue.main.async {
@@ -41,88 +89,52 @@ class CameraService: NSObject, ObservableObject {
     }
     
     private func setupSession() {
-        sessionQueue.async {
-            self.session.beginConfiguration()
-            self.session.sessionPreset = .photo // High res photo preset
-            
-            guard let videoDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
-                  let videoInput = try? AVCaptureDeviceInput(device: videoDevice) else {
-                return
-            }
-            
-            if self.session.canAddInput(videoInput) {
-                self.session.addInput(videoInput)
-            }
-            
-            if self.session.canAddOutput(self.photoOutput) {
-                self.session.addOutput(self.photoOutput)
-            }
-            
-            self.session.commitConfiguration()
-            self.session.startRunning()
+        // 5. MEMORY SAFETY: Guard against retain cycles if this takes long
+        guard !isSessionConfigured else { return }
+        
+        session.beginConfiguration()
+        session.sessionPreset = .photo
+        
+        guard let videoDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
+              let videoInput = try? AVCaptureDeviceInput(device: videoDevice) else {
+            session.commitConfiguration()
+            return
         }
+        
+        if session.canAddInput(videoInput) {
+            session.addInput(videoInput)
+        }
+        
+        if session.canAddOutput(photoOutput) {
+            session.addOutput(photoOutput)
+        }
+        
+        session.commitConfiguration()
+        isSessionConfigured = true
+        // Note: We do NOT call startRunning() here anymore. We let the start() method do it.
     }
     
-    // MARK: - Capture & Crop Logic
-    
-    func capturePhoto(in boundingBox: CGRect) {
-        // Create settings
+    func capturePhoto() {
+        // Ensure we are on the session queue or just dispatch carefully.
+        // capturePhoto itself is thread-safe but settings creation is fast.
         let settings = AVCapturePhotoSettings()
-        
-        // We pass the bounding box (from UI) as a context to the delegate
-        // Note: In production, you might want to create a custom object to hold this
-        // For simplicity, we will store the requested rect temporarily or calculate it in the delegate
-        // However, the cleanest way in AVFoundation is to do the math *after* capture or use the previewLayer helper.
-        
         photoOutput.capturePhoto(with: settings, delegate: self)
-        
-        // Store the rect to use inside the delegate
-        self.lastBoundingBox = boundingBox
     }
-    
-    private var lastBoundingBox: CGRect = .zero
-
 }
 
-// MARK: - Delegate Extension
+// MARK: - Delegate
 extension CameraService: AVCapturePhotoCaptureDelegate {
-    
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        guard error == nil else { return }
+        if let error = error {
+            print("Error capturing: \(error)")
+            return
+        }
         
         guard let imageData = photo.fileDataRepresentation(),
-              let fullImage = UIImage(data: imageData),
-              let previewLayer = self.previewLayer else { return }
+              let fullImage = UIImage(data: imageData) else { return }
         
-        // 1. Convert UI Rectangle to Normalized Device Coordinates (0-1)
-        // metadataOutputRectConverted converts the view's CGRect to the camera sensor's relative coordinates
-        let normalizedRect = previewLayer.metadataOutputRectConverted(fromLayerRect: lastBoundingBox)
-        
-        // 2. Calculate the pixel rect on the actual image
-        let cgImage = fullImage.cgImage!
-        let width = CGFloat(cgImage.width)
-        let height = CGFloat(cgImage.height)
-        
-        // Note: AVCapture usually returns landscape orientation images natively.
-        // If the photo is portrait, the coordinate system might be rotated.
-        // For robustness, we usually fix orientation first, but here is the raw math:
-        
-        let cropRect = CGRect(
-            x: normalizedRect.origin.x * width,
-            y: normalizedRect.origin.y * height,
-            width: normalizedRect.size.width * width,
-            height: normalizedRect.size.height * height
-        )
-        
-        // 3. Perform Crop
-        if let croppedCG = cgImage.cropping(to: cropRect) {
-            let croppedUIImage = UIImage(cgImage: croppedCG, scale: 1.0, orientation: fullImage.imageOrientation)
-            
-            DispatchQueue.main.async {
-                self.capturedImage = croppedUIImage
-                // Stop session if you want to freeze frame
-                // self.session.stopRunning()
-            }
+        DispatchQueue.main.async {
+            self.capturedImage = fullImage
         }
     }
 }

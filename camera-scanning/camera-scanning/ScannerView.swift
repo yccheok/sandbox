@@ -9,79 +9,61 @@ import SwiftUI
 
 struct ScannerView: View {
     @StateObject var cameraService = CameraService()
-    
-    // This defines the size of your scan area (e.g., square or 4:3)
-    // We use a GeometryReader in the body to get exact screen coordinates
-    @State private var scanRect: CGRect = .zero
-    
+
     var body: some View {
         ZStack {
             // 1. Live Camera Feed
             CameraPreviewView(cameraService: cameraService)
                 .edgesIgnoringSafeArea(.all)
-            
-            // 2. Darken overlay (The area outside the box)
-            Color.black.opacity(0.5)
-                .edgesIgnoringSafeArea(.all)
-                .mask(
-                    ZStack {
-                        Rectangle().fill(Color.white) // Full screen
-                        
-                        // Cut out the hole
-                        RoundedRectangle(cornerRadius: 20)
-                            .frame(width: 300, height: 400) // Adjust size as needed
-                            .blendMode(.destinationOut)
-                    }
-                    .compositingGroup()
-                )
-            
+                .statusBar(hidden: true)
+          
             // 3. The Scanner UI Box (Visuals)
             VStack {
                 Spacer()
                 
-                ZStack {
-                    // This invisible view is just to measure the frame for the cropper
-                    GeometryReader { geo in
-                        Color.clear
-                            .onAppear {
-                                // Save the rect frame in global coordinates
-                                self.scanRect = geo.frame(in: .global)
-                            }
-                            .onChange(of: geo.frame(in: .global)) { newFrame in
-                                self.scanRect = newFrame
-                            }
-                    }
-                    
-                    // The visual white border and corners
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color.white, lineWidth: 3)
-                    
-                    // Corner Brackets (Optional visual flair from screenshot)
-                    CornerBrackets()
-                }
-                .frame(width: 300, height: 400) // Match the hole size
+                CornerBrackets()
+                    .frame(width: 300, height: 400)
                 
                 Spacer()
                 
+
                 // 4. Controls
                 HStack(spacing: 40) {
                     Button(action: { /* Toggle Flash */ }) {
-                        Image(systemName: "bolt.fill").font(.title)
+                        Image(systemName: "photo")
+                            // 1. Use font to size the icon safely without stretching its bounding box
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundColor(.white)
+                            // 2. Force the exact button and background size you want
+                            .frame(width: 56, height: 56)
+                            // 3. Apply the background and clip it into a perfect circle
+                            .background(Color.black.opacity(0.6))
+                            .clipShape(Circle())
                     }
                     
                     // Capture Button
                     Button(action: {
-                        cameraService.capturePhoto(in: scanRect)
+                        cameraService.capturePhoto()
                     }) {
                         Circle()
                             .stroke(Color.white, lineWidth: 4)
-                            .frame(width: 70, height: 70)
-                            .overlay(Circle().fill(Color.white).padding(6))
+                            .background(Circle().fill(Color.black.opacity(0.6)))
+                            .frame(width: 80, height: 80)
+                            .overlay(Circle().fill(Color.white).padding(8))
                     }
                     
-                    Button(action: { /* Help */ }) {
-                        Image(systemName: "questionmark.circle").font(.title)
+                    Button(action: { /* Toggle Flash */ }) {
+                        Image(systemName: "photo")
+                            // 1. Use font to size the icon safely without stretching its bounding box
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundColor(.white)
+                            // 2. Force the exact button and background size you want
+                            .frame(width: 56, height: 56)
+                            // 3. Apply the background and clip it into a perfect circle
+                            .background(Color.black.opacity(0.6))
+                            .clipShape(Circle())
                     }
+                    .hidden()
                 }
                 .foregroundColor(.white)
                 .padding(.bottom, 30)
@@ -109,6 +91,12 @@ struct ScannerView: View {
                 .shadow(radius: 20)
             }
         }
+        .onAppear {
+            cameraService.start()
+        }
+        .onDisappear {
+            cameraService.stop()
+        }
     }
 }
 
@@ -129,14 +117,28 @@ struct CornerBrackets: View {
     }
     
     struct Bracket: View {
+        // 1. Set this to match the cornerRadius of your white border
+        var cornerRadius: CGFloat = 20
+        // 2. The total length of the bracket's side (curve + straight line)
+        var length: CGFloat = 40
+        
         var body: some View {
             Path { path in
-                path.move(to: CGPoint(x: 0, y: 30))
-                path.addLine(to: CGPoint(x: 0, y: 0))
-                path.addLine(to: CGPoint(x: 30, y: 0))
+                // Start at the bottom of the left vertical line
+                path.move(to: CGPoint(x: 0, y: length))
+                
+                // Draw up to the corner, curve exactly matching the radius, and face right
+                path.addArc(
+                    tangent1End: CGPoint(x: 0, y: 0),
+                    tangent2End: CGPoint(x: length, y: 0),
+                    radius: cornerRadius
+                )
+                
+                // Draw the remaining straight part on the top horizontal line
+                path.addLine(to: CGPoint(x: length, y: 0))
             }
             .stroke(Color.white, style: StrokeStyle(lineWidth: 5, lineCap: .round))
-            .frame(width: 30, height: 30)
+            .frame(width: length, height: length)
         }
     }
 }

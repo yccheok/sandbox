@@ -12,25 +12,31 @@ import AVFoundation
 struct CameraPreviewView: UIViewRepresentable {
     @ObservedObject var cameraService: CameraService
     
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView(frame: UIScreen.main.bounds)
+    func makeUIView(context: Context) -> VideoPreviewUIView {
+        let view = VideoPreviewUIView()
         view.backgroundColor = .black
         
-        let previewLayer = AVCaptureVideoPreviewLayer(session: cameraService.session)
-        previewLayer.frame = view.frame
-        previewLayer.videoGravity = .resizeAspectFill // Fills screen
-        view.layer.addSublayer(previewLayer)
-        
-        // Pass the layer back to service for coordinate conversion later
-        cameraService.previewLayer = previewLayer
+        // Use the layer created by our subclass
+        view.videoPreviewLayer.session = cameraService.session
+        view.videoPreviewLayer.videoGravity = .resizeAspectFill
         
         return view
     }
     
-    func updateUIView(_ uiView: UIView, context: Context) {
-        // Handle rotation or resizing if needed
-        if let layer = uiView.layer.sublayers?.first as? AVCaptureVideoPreviewLayer {
-            layer.frame = uiView.bounds
+    func updateUIView(_ uiView: VideoPreviewUIView, context: Context) {
+        // No manual frame setting needed here!
+        // The UIView's auto-layout handles it.
+    }
+    
+    // This is the magic part
+    class VideoPreviewUIView: UIView {
+        // Tells UIKit to use AVCaptureVideoPreviewLayer as the backing layer
+        override class var layerClass: AnyClass {
+            AVCaptureVideoPreviewLayer.self
+        }
+        
+        var videoPreviewLayer: AVCaptureVideoPreviewLayer {
+            return layer as! AVCaptureVideoPreviewLayer
         }
     }
 }
