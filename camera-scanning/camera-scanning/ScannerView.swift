@@ -98,6 +98,21 @@ struct ScannerView: View {
             .onDisappear {
                 cameraService.stop()
             }
+            // Add the alert here
+            .alert(
+                cameraService.alertError?.title ?? "Error",
+                isPresented: Binding(
+                    get: { cameraService.alertError != nil },
+                    set: { isPresented in
+                        if !isPresented { cameraService.alertError = nil }
+                    }
+                ),
+                presenting: cameraService.alertError
+            ) { _ in
+                Button("OK", role: .cancel) { }
+            } message: { error in
+                Text(error.message)
+            }
         }
     }
 }
