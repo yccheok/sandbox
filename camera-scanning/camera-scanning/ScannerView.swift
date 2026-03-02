@@ -16,126 +16,14 @@ struct ScannerView: View {
     var body: some View {
         // 3. Wrap entire content in NavigationStack
         NavigationStack(path: $path) {
-            ZStack {
-                // 1. Live Camera Feed
-                GeometryReader { proxy in
-                    CameraPreviewView(cameraService: cameraService)
-                        .onAppear {
-                            cameraService.previewSize = proxy.size
-                        }
-                        .onChange(of: proxy.size) { oldValue, newSize in
-                            cameraService.previewSize = newSize
-                        }
-                }
-                .edgesIgnoringSafeArea(.all)
-                .statusBar(hidden: true)
-                
-                // 3. The Scanner UI Box (Visuals)
-                VStack {
-                    Spacer()
-                    
-                    CornerBrackets()
-                        .frame(width: 300, height: 400)
-                    
-                    Spacer()
-                    
-                    
-                    // 4. Controls
-                    HStack(spacing: 40) {
-                        Button(action: { /* Toggle Flash */ }) {
-                            Image(systemName: "photo")
-                            // 1. Use font to size the icon safely without stretching its bounding box
-                                .font(.system(size: 24, weight: .bold))
-                                .foregroundColor(.white)
-                            // 2. Force the exact button and background size you want
-                                .frame(width: 56, height: 56)
-                            // 3. Apply the background and clip it into a perfect circle
-                                .background(Color.black.opacity(0.6))
-                                .clipShape(Circle())
-                        }
-                        
-                        // Capture Button
-                        Button(action: {
-                            cameraService.capturePhoto()
-                        }) {
-                            Circle()
-                                .stroke(Color.white, lineWidth: 4)
-                                .background(Circle().fill(Color.black.opacity(0.6)))
-                                .frame(width: 80, height: 80)
-                                .overlay(Circle().fill(Color.white).padding(8))
-                        }
-                        
-                        Button(action: { /* Toggle Flash */ }) {
-                            Image(systemName: "photo")
-                            // 1. Use font to size the icon safely without stretching its bounding box
-                                .font(.system(size: 24, weight: .bold))
-                                .foregroundColor(.white)
-                            // 2. Force the exact button and background size you want
-                                .frame(width: 56, height: 56)
-                            // 3. Apply the background and clip it into a perfect circle
-                                .background(Color.black.opacity(0.6))
-                                .clipShape(Circle())
-                        }
-                        .hidden()
-                    }
-                    .foregroundColor(.white)
-                    .padding(.bottom, 30)
-                }
-
-                // Debug Overlay
-                if let capturedImage = cameraService.capturedImage {
-                    ZStack {
-                        Color.black.opacity(0.85).edgesIgnoringSafeArea(.all)
-                        
-                        VStack(spacing: 20) {
-                            Text("Debug: Cropped Image")
-                                .font(.title3)
-                                .fontWeight(.bold)
-                                .foregroundColor(.white)
-                            
-                            Image(uiImage: capturedImage)
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(maxWidth: 300, maxHeight: 500)
-                                .border(Color.green, width: 2)
-                                .overlay(
-                                    Text("\(Int(capturedImage.size.width)) x \(Int(capturedImage.size.height))")
-                                        .font(.caption)
-                                        .foregroundColor(.white)
-                                        .padding(4)
-                                        .background(Color.black.opacity(0.6))
-                                        .cornerRadius(4)
-                                        .padding(4),
-                                    alignment: .topLeading
-                                )
-                            
-                            Button(action: {
-                                cameraService.capturedImage = nil
-                            }) {
-                                Text("Close Debug")
-                                    .fontWeight(.bold)
-                                    .padding()
-                                    .frame(maxWidth: .infinity)
-                                    .background(Color.white)
-                                    .foregroundColor(.black)
-                                    .cornerRadius(10)
-                            }
-                            .padding(.horizontal)
-                        }
-                        .padding()
-                    }
-                    .zIndex(100)
+            Group {
+                if let image = cameraService.capturedImage {
+                    capturedImageView(image)
+                } else {
+                    scannerUI()
                 }
             }
-            // 5. Result Navigation Logic (Replaces the old overlay)
-            // Commented out for debug purpose
-            /*
-            .onChange(of: cameraService.capturedImage) { oldValue, newImage in
-                if newImage != nil {
-                    path.append(AppRoute.screenB)
-                }
-            }
-            */
+            // navigation and lifecycle handlers remain the same
             .navigationDestination(for: AppRoute.self) { route in
                 switch route {
                 case .screenB:
@@ -167,6 +55,92 @@ struct ScannerView: View {
                 Button("OK", role: .cancel) { }
             } message: { error in
                 Text(error.message)
+            }
+        }
+    }
+    
+    // MARK: - View Builders
+    
+    @ViewBuilder
+    private func scannerUI() -> some View {
+        ZStack {
+            // Live camera feed
+            GeometryReader { proxy in
+                CameraPreviewView(cameraService: cameraService)
+                    .onAppear {
+                        cameraService.previewSize = proxy.size
+                    }
+                    .onChange(of: proxy.size) { _, newSize in
+                        cameraService.previewSize = newSize
+                    }
+            }
+            .edgesIgnoringSafeArea(.all)
+            .statusBar(hidden: true)
+            
+            // Scanner frame and controls
+            VStack {
+                Spacer()
+                
+                CornerBrackets()
+                    .frame(width: 300, height: 400)
+                
+                Spacer()
+                
+                HStack(spacing: 40) {
+                    Button(action: { /* Toggle Flash */ }) {
+                        Image(systemName: "photo")
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 56, height: 56)
+                            .background(Color.black.opacity(0.6))
+                            .clipShape(Circle())
+                    }
+                    
+                    Button(action: {
+                        cameraService.capturePhoto()
+                    }) {
+                        Circle()
+                            .stroke(Color.white, lineWidth: 4)
+                            .background(Circle().fill(Color.black.opacity(0.6)))
+                            .frame(width: 80, height: 80)
+                            .overlay(Circle().fill(Color.white).padding(8))
+                    }
+                    
+                    Button(action: { /* Toggle Flash */ }) {
+                        Image(systemName: "photo")
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 56, height: 56)
+                            .background(Color.black.opacity(0.6))
+                            .clipShape(Circle())
+                    }
+                    .hidden()
+                }
+                .foregroundColor(.white)
+                .padding(.bottom, 30)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func capturedImageView(_ image: UIImage) -> some View {
+        ZStack(alignment: .bottom) {
+            Image(uiImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.black)
+                .edgesIgnoringSafeArea(.all)
+                .statusBarHidden(true)
+            
+            Button(action: { cameraService.capturedImage = nil }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 56, height: 56)
+                    .background(Color.black.opacity(0.6))
+                    .clipShape(Circle())
+                    .padding(.bottom, 30)
             }
         }
     }
