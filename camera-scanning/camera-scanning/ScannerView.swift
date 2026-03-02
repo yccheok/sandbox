@@ -18,9 +18,17 @@ struct ScannerView: View {
         NavigationStack(path: $path) {
             ZStack {
                 // 1. Live Camera Feed
-                CameraPreviewView(cameraService: cameraService)
-                    .edgesIgnoringSafeArea(.all)
-                    .statusBar(hidden: true)
+                GeometryReader { proxy in
+                    CameraPreviewView(cameraService: cameraService)
+                        .onAppear {
+                            cameraService.previewSize = proxy.size
+                        }
+                        .onChange(of: proxy.size) { oldValue, newSize in
+                            cameraService.previewSize = newSize
+                        }
+                }
+                .edgesIgnoringSafeArea(.all)
+                .statusBar(hidden: true)
                 
                 // 3. The Scanner UI Box (Visuals)
                 VStack {
@@ -74,13 +82,60 @@ struct ScannerView: View {
                     .padding(.bottom, 30)
                 }
 
+                // Debug Overlay
+                if let capturedImage = cameraService.capturedImage {
+                    ZStack {
+                        Color.black.opacity(0.85).edgesIgnoringSafeArea(.all)
+                        
+                        VStack(spacing: 20) {
+                            Text("Debug: Cropped Image")
+                                .font(.title3)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                            
+                            Image(uiImage: capturedImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(maxWidth: 300, maxHeight: 500)
+                                .border(Color.green, width: 2)
+                                .overlay(
+                                    Text("\(Int(capturedImage.size.width)) x \(Int(capturedImage.size.height))")
+                                        .font(.caption)
+                                        .foregroundColor(.white)
+                                        .padding(4)
+                                        .background(Color.black.opacity(0.6))
+                                        .cornerRadius(4)
+                                        .padding(4),
+                                    alignment: .topLeading
+                                )
+                            
+                            Button(action: {
+                                cameraService.capturedImage = nil
+                            }) {
+                                Text("Close Debug")
+                                    .fontWeight(.bold)
+                                    .padding()
+                                    .frame(maxWidth: .infinity)
+                                    .background(Color.white)
+                                    .foregroundColor(.black)
+                                    .cornerRadius(10)
+                            }
+                            .padding(.horizontal)
+                        }
+                        .padding()
+                    }
+                    .zIndex(100)
+                }
             }
             // 5. Result Navigation Logic (Replaces the old overlay)
+            // Commented out for debug purpose
+            /*
             .onChange(of: cameraService.capturedImage) { oldValue, newImage in
                 if newImage != nil {
                     path.append(AppRoute.screenB)
                 }
             }
+            */
             .navigationDestination(for: AppRoute.self) { route in
                 switch route {
                 case .screenB:

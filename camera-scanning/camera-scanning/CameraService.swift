@@ -7,6 +7,8 @@ class CameraService: NSObject, ObservableObject {
     // 1. AlertError should be published on MainActor usually, but @Published handles it.
     @Published var alertError: AlertError?
     
+    var previewSize: CGSize = .zero
+    
     // 2. Keep session public for PreviewLayer, but manage lifecycle internally
     let session = AVCaptureSession()
     
@@ -133,8 +135,53 @@ extension CameraService: AVCapturePhotoCaptureDelegate {
         guard let imageData = photo.fileDataRepresentation(),
               let fullImage = UIImage(data: imageData) else { return }
         
+        // Check if we need to crop
+        let finalImage: UIImage
+        if self.previewSize != .zero {
+            finalImage = self.cropImageToPreview(image: fullImage, previewSize: self.previewSize) ?? fullImage
+        } else {
+            finalImage = fullImage
+        }
+
         DispatchQueue.main.async {
-            self.capturedImage = fullImage
+            self.capturedImage = finalImage
+        }
+    }
+
+    private func cropImageToPreview(image: UIImage, previewSize: CGSize) -> UIImage? {
+        guard previewSize.width > 0, previewSize.height > 0 else { return nil }
+        
+        let targetAspectRatio = previewSize.width / previewSize.height
+        let imageAspectRatio = image.size.width / image.size.height
+        
+        var cropRect: CGRect = .zero
+        
+        if targetAspectRatio > imageAspectRatio {
+            // Target is wider than image.
+            // We need to crop the height of the image to match the target aspect ratio.
+            // width / newHeight = targetAspectRatio
+            // newHeight = width / targetAspectRatio
+            let newHeight = image.size.width / targetAspectRatio
+            let y = (image.size.height - newHeight) / 2
+            cropRect = CGRect(x: 0, y: y, width: image.size.width, height: newHeight)
+        } else {
+            // Target is narrower (taller) than image.
+            // We need to crop the width of the image to match the target aspect ratio.
+            // newWidth / height = targetAspectRatio
+            // newWidth = height * targetAspectRatio
+            let newWidth = image.size.height * targetAspectRatio
+            let x = (image.size.width - newWidth) / 2
+            cropRect = CGRect(x: x, y: 0, width: newWidth, height: image.size.height)
+        }
+        
+        // Use UIGraphicsImageRenderer to handle orientation and cropping automatically
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = image.scale
+        let renderer = UIGraphicsImageRenderer(size: cropRect.size, format: format)
+        
+        return renderer.image { _ in
+            // Draw the image offset by the crop origin
+            image.draw(at: CGPoint(x: -cropRect.origin.x, y: -cropRect.origin.y))
         }
     }
 }
