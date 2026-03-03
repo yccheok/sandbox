@@ -10,6 +10,15 @@ import Vision
 import CoreImage
 import CoreImage.CIFilterBuiltins
 
+// A simple model representing the outcome of an image upload.
+//
+// - success: `true` when the request succeeded, `false` otherwise.
+// - json: an optional string payload returned by the server on success.
+struct UploadResult {
+    let success: Bool
+    let json: String?
+}
+
 struct ContoursShape: Shape {
     
     var contours: CGPath?
@@ -42,9 +51,12 @@ struct ScannerView: View {
     @State private var position: CGFloat = 0.0
     
     
-    // Add these for your API call
+    // MARK: - API Upload State
     @State private var isUploading: Bool = false
-    @State private var uploadResult: String? = nil // Change String to your actual Result model
+    /// Holds the result of an upload. `success` indicates whether the
+    /// operation completed successfully and `json` contains the returned
+    /// payload when available.
+    @State private var uploadResult: UploadResult? = nil
     
     var body: some View {
         // 3. Wrap entire content in NavigationStack
@@ -250,6 +262,8 @@ struct ScannerView: View {
             let serverResponse = try await NetworkManager.shared.uploadImage(image)
             
             print("Upload Success! Server said: \(serverResponse)")
+            // populate state
+            uploadResult = UploadResult(success: true, json: serverResponse)
             
             // Navigate to the next screen or update UI
             // path.append(AppRoute.screenB)
@@ -259,6 +273,8 @@ struct ScannerView: View {
                 print("Upload cancelled by user.")
             } else {
                 print("Upload failed: \(error)")
+                // store failure flag; json remains nil
+                uploadResult = UploadResult(success: false, json: nil)
                 // Show an alert to the user here
             }
         }
