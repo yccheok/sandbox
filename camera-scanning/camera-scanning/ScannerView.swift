@@ -42,6 +42,10 @@ struct ScannerView: View {
     @State private var position: CGFloat = 0.0
     
     
+    // Add these for your API call
+    @State private var isUploading: Bool = false
+    @State private var uploadResult: String? = nil // Change String to your actual Result model
+    
     var body: some View {
         // 3. Wrap entire content in NavigationStack
         NavigationStack(path: $path) {
@@ -232,8 +236,34 @@ struct ScannerView: View {
                 }
             }
         }
+        .task(id: image) {
+            await processImageWithAPI(image)
+        }
     }
     
+    private func processImageWithAPI(_ image: UIImage) async {
+        isUploading = true
+        defer { isUploading = false }
+        
+        do {
+            // Call the shared manager
+            let serverResponse = try await NetworkManager.shared.uploadImage(image)
+            
+            print("Upload Success! Server said: \(serverResponse)")
+            
+            // Navigate to the next screen or update UI
+            // path.append(AppRoute.screenB)
+            
+        } catch {
+            if error is CancellationError {
+                print("Upload cancelled by user.")
+            } else {
+                print("Upload failed: \(error)")
+                // Show an alert to the user here
+            }
+        }
+    }
+
     private func drawContours(_ image: UIImage) {
         let processingImage = image
                 
