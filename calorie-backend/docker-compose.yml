@@ -1,0 +1,50 @@
+services:
+
+  nginx:
+    # For development.
+    ports:
+      - "80:80"
+
+    networks:
+      - proxy
+      - internal
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      - flask
+    expose:
+      - "80"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nginx-calorie.rule=Host(`calorie.wenote.me`)"
+      - "traefik.http.routers.nginx-calorie.entrypoints=websecure"
+      - "traefik.http.services.nginx-calorie.loadbalancer.server.port=80"
+      - "traefik.docker.network=proxy"
+    logging:
+        driver: "json-file"
+        options:
+            max-file: "10"
+            max-size: "10m"
+
+  flask:
+    networks:
+      - internal
+    build:
+      context: ./flask
+      dockerfile: Dockerfile
+    restart: always
+    expose:
+      - "5000"
+    logging:
+        driver: "json-file"
+        options:
+            max-file: "10"
+            max-size: "10m"
+  
+networks:
+  proxy:
+    external: true
+  internal:
+    external: false
