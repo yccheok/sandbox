@@ -162,7 +162,7 @@ struct ScannerView: View {
                     .hidden()
                 }
                 .foregroundColor(.white)
-                .padding(.bottom, 30)
+                .padding(.bottom, 32)
             }
         }
     }
@@ -209,19 +209,64 @@ struct ScannerView: View {
                 contentMode: .fit
             )
             
-            Button(action: {
-                cameraService.capturedImage = nil
-                position = 0.0
-                contours = nil
-            }) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 56, height: 56)
-                    .background(Color.black.opacity(0.6))
-                    .clipShape(Circle())
-                    .padding(.bottom, 30)
-            }
+            Group {
+                if let uploadResult {
+                    if uploadResult.success {
+                        HStack {
+                            Text("Success")
+                                .font(.headline)
+                                .padding(8)
+                                .foregroundStyle(.black)
+                                .background(.yellow)
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                            
+                            Button(action: {
+                                cameraService.capturedImage = nil
+                                position = 0.0
+                                contours = nil
+                            }) {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 24, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .frame(width: 56, height: 56)
+                                    .background(Color.black.opacity(0.6))
+                                    .clipShape(Circle())
+                            }
+                        }
+                    } else {
+                        HStack {
+                            Text("Fail")
+                                .font(.headline)
+                                .padding(8)
+                                .foregroundStyle(.black)
+                                .background(.yellow)
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                            
+                            Button(action: {
+                                cameraService.capturedImage = nil
+                                position = 0.0
+                                contours = nil
+                            }) {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 24, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .frame(width: 56, height: 56)
+                                    .background(Color.black.opacity(0.6))
+                                    .clipShape(Circle())
+                            }
+                        }
+                    }
+
+                } else {
+                    Text("Processing...")
+                        .font(.headline)
+                        .padding(8)
+                        .foregroundStyle(.black)
+                        .background(.yellow)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                }
+            }.padding(32)
+
         }
         .edgesIgnoringSafeArea(.all)
         .statusBarHidden(true)
@@ -258,8 +303,11 @@ struct ScannerView: View {
         defer { isUploading = false }
         
         do {
-            // Call the shared manager
-            let serverResponse = try await NetworkManager.shared.uploadImage(image)
+            // 1. Swift 6.2 sees @concurrent and hops off the MainActor
+            let aiReadyImage = await image.resizedForAI(maxDimension: 768.0)
+            
+            // 2. Safely resumes on the MainActor, then fires the network request
+            let serverResponse = try await NetworkManager.shared.uploadImage(aiReadyImage)
             
             print("Upload Success! Server said: \(serverResponse)")
             // populate state
