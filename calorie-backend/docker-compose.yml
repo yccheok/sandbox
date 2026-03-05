@@ -1,7 +1,6 @@
 services:
 
   nginx:
-    # For development.
     ports:
       - "80:80"
 
@@ -13,7 +12,7 @@ services:
       dockerfile: Dockerfile
     restart: always
     depends_on:
-      - flask
+      - fastapi
     expose:
       - "80"
     labels:
@@ -28,11 +27,11 @@ services:
             max-file: "10"
             max-size: "10m"
 
-  flask:
+  fastapi:
     networks:
       - internal
     build:
-      context: ./flask
+      context: ./fastapi
       dockerfile: Dockerfile
     restart: always
     expose:
