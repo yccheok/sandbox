@@ -1,6 +1,6 @@
 import os
 import shutil
-from typing import List
+from typing import Dict
 from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -21,24 +21,27 @@ def allowed_file(filename: str):
 # --- WebSocket Manager ---
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: List[WebSocket] = []
+        # Map client_id -> WebSocket
+        self.active_connections: Dict[str, WebSocket] = {}
 
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, websocket: WebSocket, client_id: str):
         await websocket.accept()
-        self.active_connections.append(websocket)
+        self.active_connections[client_id] = websocket
 
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+    def disconnect(self, client_id: str):
+        if client_id in self.active_connections:
+            del self.active_connections[client_id]
 
-    async def broadcast(self, message: str):
-        for connection in self.active_connections:
-            await connection.send_text(message)
+    async def send_personal_message(self, message: str, client_id: str):
+        if client_id in self.active_connections:
+            await self.active_connections[client_id].send_text(message)
 
 manager = ConnectionManager()
 
 
 # --- Pydantic Models ---
 class Notification(BaseModel):
+    client_id: str
     message: str
 
 
@@ -93,9 +96,9 @@ async def upload_image(file: UploadFile = File(...)):
     )
 
 # --- WebSocket Endpoint ---
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
+@app.websocket("/ws/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: str):
+    await manager.connect(websocket, client_id)
     try:
         while True:
             # Keep connection alive
@@ -104,14 +107,14 @@ async def websocket_endpoint(websocket: WebSocket):
             # For this requirement, we mainly push notifications to the client
             # But we must await receive_text to keep the loop running and detect disconnects
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        manager.disconnect(client_id)
 
 
 # --- Trigger Notification Endpoint (for Worker) ---
 @app.post("/notify")
 async def notify(notification: Notification):
     """
-    Endpoint for the worker to trigger a notification to all connected clients.
+    Endpoint for the worker to trigger a notification to a specific client.
     """
-    await manager.broadcast(notification.message)
-    return {"status": "notification sent", "message": notification.message}
+    await manager.send_personal_message(notification.message, notification.client_id)
+    return {"status": "notification sent", "client_id": notification.client_id}

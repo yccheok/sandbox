@@ -2,17 +2,19 @@ import requests
 import sys
 import time
 
-# usage: python worker.py [base_url]
-# example: python worker.py http://localhost
+# usage: python worker.py [client_id] [base_url]
+# example: python worker.py ios_device_1 http://localhost
 
-BASE_URL = sys.argv[1] if len(sys.argv) > 1 else "http://localhost"
+CLIENT_ID = sys.argv[1] if len(sys.argv) > 1 else "ios_device_1"
+BASE_URL = sys.argv[2] if len(sys.argv) > 2 else "http://localhost"
 
 def trigger_notification():
     endpoint = f"{BASE_URL}/notify"
-    print(f"Attempting to trigger notification at {endpoint}...")
+    print(f"Attempting to trigger notification at {endpoint} for client '{CLIENT_ID}'...")
     
     payload = {
-        "message": "Data availability notification: New analysis ready!"
+        "client_id": CLIENT_ID,
+        "message": f"Data availability notification for {CLIENT_ID}: New analysis ready!"
     }
     
     try:
