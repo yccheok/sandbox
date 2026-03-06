@@ -22,10 +22,10 @@ services:
       - "traefik.http.services.nginx-calorie.loadbalancer.server.port=80"
       - "traefik.docker.network=proxy"
     logging:
-        driver: "json-file"
-        options:
-            max-file: "10"
-            max-size: "10m"
+      driver: "json-file"
+      options:
+        max-file: "10"
+        max-size: "10m"
 
   fastapi:
     networks:
@@ -35,29 +35,54 @@ services:
       dockerfile: Dockerfile
     restart: always
     depends_on:
-          - redis
+      - redis
     expose:
       - "5000"
     logging:
-        driver: "json-file"
-        options:
-            max-file: "10"
-            max-size: "10m"
+      driver: "json-file"
+      options:
+        max-file: "10"
+        max-size: "10m"
   
   redis:
-      image: redis:8.6.1-alpine
+    image: redis:8.6.1-alpine
       restart: always
-      networks:
-        - internal
-      expose:
-        - "6379"
-      volumes:
-        - redis:/data
-      logging:
-          driver: "json-file"
-          options:
-              max-file: "10"
-              max-size: "10m"
+    networks:
+      - internal
+    expose:
+      - "6379"
+    volumes:
+      - redis:/data
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "10"
+        max-size: "10m"
+
+  rabbitmq:
+    image: rabbitmq:4.2.4-management-alpine
+    hostname: rabbitmq
+    networks:
+      - internal
+    restart: always
+    volumes:
+      - rabbitmq:/var/lib/rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=CpjvMhAKCC3AHpa8
+    expose:
+      - "5672"
+      - "15672"
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "10"
+        max-size: "10m"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 
 networks:
@@ -69,3 +94,4 @@ networks:
 
 volumes:
   redis:
+  rabbitmq:
