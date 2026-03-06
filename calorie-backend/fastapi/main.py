@@ -2,9 +2,53 @@ import os
 import shutil
 from typing import Dict
 from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+import asyncio
+import json
+from contextlib import asynccontextmanager
+from fastapi.responses import JSONResponse
+import redis.asyncio as redis
+
+
+# --- Redis Setup ---
+# In production, replace 'localhost' with your Redis server URL
+redis_client = redis.Redis(host='redis', port=6379, decode_responses=True)
+REDIS_CHANNEL = "ws_notifications"
+
+
+# --- Redis Background Listener ---
+async def redis_listener():
+    """Listens for messages from Redis and forwards them to local WebSockets."""
+    pubsub = redis_client.pubsub()
+    await pubsub.subscribe(REDIS_CHANNEL)
+    
+    print(f"Subscribed to Redis channel: {REDIS_CHANNEL}")
+    
+    try:
+        async for message in pubsub.listen():
+            if message["type"] == "message":
+                # Parse the incoming JSON message from the worker
+                data = json.loads(message["data"])
+                target_client = data.get("client_id")
+                payload = data.get("message")
+                
+                # Forward it (manager checks if client is on this instance)
+                await manager.send_personal_message(payload, target_client)
+    except asyncio.CancelledError:
+        await pubsub.unsubscribe(REDIS_CHANNEL)
+
+# --- FastAPI Lifespan ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Start the Redis listener in the background when app starts
+    listener_task = asyncio.create_task(redis_listener())
+    yield
+    # Clean up when the app shuts down
+    listener_task.cancel()
+    await redis_client.close()
+
+    
 app = FastAPI()
 
 # --- Upload Configuration ---
@@ -108,13 +152,3 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
             # But we must await receive_text to keep the loop running and detect disconnects
     except WebSocketDisconnect:
         manager.disconnect(client_id)
-
-
-# --- Trigger Notification Endpoint (for Worker) ---
-@app.post("/notify")
-async def notify(notification: Notification):
-    """
-    Endpoint for the worker to trigger a notification to a specific client.
-    """
-    await manager.send_personal_message(notification.message, notification.client_id)
-    return {"status": "notification sent", "client_id": notification.client_id}

@@ -34,6 +34,8 @@ services:
       context: ./fastapi
       dockerfile: Dockerfile
     restart: always
+    depends_on:
+          - redis
     expose:
       - "5000"
     logging:
@@ -42,8 +44,28 @@ services:
             max-file: "10"
             max-size: "10m"
   
+  redis:
+      image: redis:8.6.1-alpine
+      restart: always
+      networks:
+        - internal
+      expose:
+        - "6379"
+      volumes:
+        - redis:/data
+      logging:
+          driver: "json-file"
+          options:
+              max-file: "10"
+              max-size: "10m"
+
+
 networks:
   proxy:
     external: true
   internal:
     external: false
+
+
+volumes:
+  redis:
