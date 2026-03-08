@@ -28,24 +28,49 @@ REDIS_CHANNEL = "ws_notifications"
 
 # --- Redis Background Listener ---
 async def redis_listener():
-    """Listens for messages from Redis and forwards them to local WebSockets."""
-    pubsub = redis_client.pubsub()
-    await pubsub.subscribe(REDIS_CHANNEL)
+    """Listens for messages from Redis with automatic reconnection."""
+    print(f"Starting background listener for channel: {REDIS_CHANNEL}")
     
-    print(f"Subscribed to Redis channel: {REDIS_CHANNEL}")
-    
-    try:
-        async for message in pubsub.listen():
-            if message["type"] == "message":
-                # Parse the incoming JSON message from the worker
-                data = json.loads(message["data"])
-                target_client = data.get("client_id")
-                payload = data.get("message")
-                
-                # Forward it (manager checks if client is on this instance)
-                await manager.send_personal_message(payload, target_client)
-    except asyncio.CancelledError:
-        await pubsub.unsubscribe(REDIS_CHANNEL)
+    # The outer loop keeps the task alive indefinitely
+    while True:
+        try:
+            # Create the pubsub object inside the loop so we get a fresh 
+            # connection if we are recovering from a crash
+            pubsub = redis_client.pubsub()
+            await pubsub.subscribe(REDIS_CHANNEL)
+            print(f"Successfully subscribed/reconnected to Redis! : {REDIS_CHANNEL}")
+            
+            # The async generator (the "inner" infinite loop)
+            async for message in pubsub.listen():
+                type = message["type"]
+
+                print(f"Received in Redis! : {REDIS_CHANNEL}")
+                print(f"The received type is : {type}")
+
+                if type == "message":
+                    data = json.loads(message["data"])
+                    client_id = data.get("client_id")
+                    message = data.get("message")
+                    
+                    print(f"⬅️ >>>> fastapi receiving message '{message}' and client id '{client_id}'")
+
+                    await manager.send_personal_message(message, client_id)
+                    
+        except asyncio.CancelledError:
+            # This is triggered by lifespan's listener_task.cancel()
+            # We MUST break the while loop here, or the app will never shut down!
+            print("Received shutdown signal. Unsubscribing from Redis...")
+            await pubsub.unsubscribe(REDIS_CHANNEL)
+            break 
+            
+        except Exception as e:
+            # Catch connection drops, Redis timeouts, or unexpected errors
+            print(f"Redis connection error: {e}")
+            print("Attempting to reconnect in 5 seconds...")
+            
+            # Prevent the while loop from spinning too fast and maxing out your CPU
+            await asyncio.sleep(5)
+
 
 # --- FastAPI Lifespan ---
 @asynccontextmanager
@@ -59,6 +84,7 @@ async def lifespan(app: FastAPI):
 
     
 app = FastAPI(lifespan=lifespan)
+
 
 # --- Upload Configuration ---
 # Create upload directory if it doesn't exist
@@ -86,8 +112,6 @@ class ConnectionManager:
             del self.active_connections[client_id]
 
     async def send_personal_message(self, message: str, client_id: str):
-        print(f">>>> fastapi send_personal_message {message} to {client_id}")
-
         if client_id in self.active_connections:
             await self.active_connections[client_id].send_text(message)
 
