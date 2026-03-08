@@ -9,6 +9,15 @@ import json
 from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse
 import redis.asyncio as redis
+from celery import Celery
+import constants
+
+
+celery = Celery(
+    'main', 
+    broker=constants.CELERY_BROKER_URL, 
+    backend=constants.CELERY_RESULT_BACKEND
+)
 
 
 # --- Redis Setup ---
@@ -93,6 +102,8 @@ class Notification(BaseModel):
 
 @app.get("/info/")
 async def info():
+    celery.send_task('melon.markmap', queue='melon', args=[request_data], kwargs={})
+
     return "development only"
 
 @app.post("/upload")

@@ -20,3 +20,5 @@ def notify_client(client_id: str, message: str):
 @app.task(name='calorie.demo', bind=True, max_retries=0, ignore_result=True)
 def demo(self, request_data):
     print(">>>> demo")
+
+    notify_client(client_id="client-123", message="hello world")
