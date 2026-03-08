@@ -46,7 +46,7 @@ services:
   
   redis:
     image: redis:8.6.1-alpine
-      restart: always
+    restart: always
     networks:
       - internal
     expose:
