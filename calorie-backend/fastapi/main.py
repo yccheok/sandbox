@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
     await redis_client.close()
 
     
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 # --- Upload Configuration ---
 # Create upload directory if it doesn't exist
@@ -86,6 +86,8 @@ class ConnectionManager:
             del self.active_connections[client_id]
 
     async def send_personal_message(self, message: str, client_id: str):
+        print(f">>>> fastapi send_personal_message {message} to {client_id}")
+
         if client_id in self.active_connections:
             await self.active_connections[client_id].send_text(message)
 
@@ -102,9 +104,12 @@ class Notification(BaseModel):
 
 @app.get("/info/")
 async def info():
-    celery.send_task('melon.markmap', queue='melon', args=[request_data], kwargs={})
+    request_data = {}
+
+    celery.send_task('calorie.demo', queue='calorie', args=[request_data], kwargs={})
 
     return "development only"
+
 
 @app.post("/upload")
 async def upload_image(file: UploadFile = File(...)):

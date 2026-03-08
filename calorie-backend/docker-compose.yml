@@ -59,6 +59,17 @@ services:
         max-file: "10"
         max-size: "10m"
 
+  calorie:
+    networks:
+      - internal
+    build:
+      context: ./calorie
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
   rabbitmq:
     image: rabbitmq:4.2.4-management-alpine
     hostname: rabbitmq
