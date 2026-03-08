@@ -4,7 +4,7 @@ from celery import Celery
 
 redis_worker = redis.Redis(host='redis', port=6379, decode_responses=True)
 
-app = Celery('melon')
+app = Celery('calorie')
 app.config_from_object('celeryconfig')
 
 def notify_client(client_id: str, message: str):

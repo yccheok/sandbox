@@ -38,35 +38,35 @@ async def redis_listener():
             # connection if we are recovering from a crash
             pubsub = redis_client.pubsub()
             await pubsub.subscribe(REDIS_CHANNEL)
-            print(f"Successfully subscribed/reconnected to Redis! : {REDIS_CHANNEL}")
+            print(f"Successfully subscribed/reconnected to Redis! : {REDIS_CHANNEL}", flush=True)
             
             # The async generator (the "inner" infinite loop)
             async for message in pubsub.listen():
                 type = message["type"]
 
-                print(f"Received in Redis! : {REDIS_CHANNEL}")
-                print(f"The received type is : {type}")
+                print(f"Received in Redis! : {REDIS_CHANNEL}", flush=True)
+                print(f"The received type is : {type}", flush=True)
 
                 if type == "message":
                     data = json.loads(message["data"])
                     client_id = data.get("client_id")
                     message = data.get("message")
                     
-                    print(f"⬅️ >>>> fastapi receiving message '{message}' and client id '{client_id}'")
+                    print(f"⬅️ >>>> fastapi receiving message '{message}' and client id '{client_id}'", flush=True)
 
                     await manager.send_personal_message(message, client_id)
                     
         except asyncio.CancelledError:
             # This is triggered by lifespan's listener_task.cancel()
             # We MUST break the while loop here, or the app will never shut down!
-            print("Received shutdown signal. Unsubscribing from Redis...")
+            print("Received shutdown signal. Unsubscribing from Redis...", flush=True)
             await pubsub.unsubscribe(REDIS_CHANNEL)
             break 
             
         except Exception as e:
             # Catch connection drops, Redis timeouts, or unexpected errors
-            print(f"Redis connection error: {e}")
-            print("Attempting to reconnect in 5 seconds...")
+            print(f"Redis connection error: {e}", flush=True)
+            print("Attempting to reconnect in 5 seconds...", flush=True)
             
             # Prevent the while loop from spinning too fast and maxing out your CPU
             await asyncio.sleep(5)
